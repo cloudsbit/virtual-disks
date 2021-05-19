@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"github.com/vmware/virtual-disks/pkg/disklib"
-	"github.com/vmware/virtual-disks/pkg/virtual_disks"
+	"github.com/cloudsbit/virtual-disks/pkg/disklib"
+	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"

@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/vmware/virtual-disks/pkg/disklib"
+	"github.com/cloudsbit/virtual-disks/pkg/disklib"
 	"os"
 	"strings"
 	"testing"

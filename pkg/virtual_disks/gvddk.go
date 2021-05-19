@@ -24,7 +24,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/vmware/virtual-disks/pkg/disklib"
+	"github.com/cloudsbit/virtual-disks/pkg/disklib"
 )
 
 func OpenFCD(serverName string, thumbPrint string, userName string, password string, fcdId string, fcdssid string, datastore string,
