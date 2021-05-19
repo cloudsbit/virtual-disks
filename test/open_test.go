@@ -43,7 +43,7 @@ func TestOpen(t *testing.T) {
 	identity := os.Getenv("IDENTITY")
 	params := disklib.NewConnectParams("", serverName,thumPrint, userName,
 		password, fcdId, ds, "", "", identity, "", disklib.VIXDISKLIB_FLAG_OPEN_COMPRESSION_SKIPZ,
-		false, disklib.NBD)
+		false, "", disklib.NBD)
 	diskReaderWriter, err := virtual_disks.Open(params, logrus.New())
 	if err != nil {
 		disklib.EndAccess(params)

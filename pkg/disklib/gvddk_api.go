@@ -63,6 +63,8 @@ func prepareConnectParams(appGlobal ConnectParams) (*C.VixDiskLibConnectParams, 
 	}
 	cnxParams.thumbPrint = thumbPrint
 	cnxParams.serverName = serverName
+	//cnxParams.port = 0
+
 	if appGlobal.cookie == "" {
 		cnxParams.credType = C.VIXDISKLIB_CRED_UID
 		C.Params_helper(cnxParams, cookie, userName, password, false, false)
@@ -96,9 +98,13 @@ func ConnectEx(appGlobal ConnectParams) (VixDiskLibConnection, VddkError) {
 	var connection VixDiskLibConnection
 	cnxParams, toFree := prepareConnectParams(appGlobal)
 	defer freeParams(toFree)
+
+	snapRef := C.CString(appGlobal.snapshotRef)
+	defer C.free(unsafe.Pointer(snapRef))
+
 	modes := C.CString(appGlobal.mode)
 	defer C.free(unsafe.Pointer(modes))
-	err := C.ConnectEx(cnxParams, C._Bool(appGlobal.readOnly), modes, &connection.conn)
+	err := C.ConnectEx(cnxParams, C._Bool(appGlobal.readOnly), snapRef, modes, &connection.conn)
 	if err != 0 {
 		return VixDiskLibConnection{}, NewVddkError(uint64(err), fmt.Sprintf("ConnectEx failed. The error code is %d.", err))
 	}

@@ -95,7 +95,8 @@ type ConnectParams struct {
 	path       string
 	flag       uint32
 	readOnly   bool
-	mode       string
+	snapshotRef string
+	mode        string
 }
 
 type VixDiskLibHandle struct {
@@ -172,22 +173,23 @@ func (this vddkErrorImpl) VixErrorCode() uint64 {
 }
 
 func NewConnectParams(vmxSpec string, serverName string, thumbPrint string, userName string, password string,
-	fcdId string, ds string, fcdssId string, cookie string, identity string, path string, flag uint32, readOnly bool, mode string) ConnectParams {
+	fcdId string, ds string, fcdssId string, cookie string, identity string, path string, flag uint32, readOnly bool, snapshotRef string, mode string) ConnectParams {
 	params := ConnectParams{
-		vmxSpec:    vmxSpec,
-		serverName: serverName,
-		thumbPrint: thumbPrint,
-		userName:   userName,
-		password:   password,
-		fcdId:      fcdId,
-		ds:         ds,
-		fcdssId:    fcdssId,
-		cookie:     cookie,
-		identity:   identity,
-		path:       path,
-		flag:       flag,
-		readOnly:   readOnly,
-		mode:       mode,
+		vmxSpec:     vmxSpec,
+		serverName:  serverName,
+		thumbPrint:  thumbPrint,
+		userName:    userName,
+		password:    password,
+		fcdId:       fcdId,
+		ds:          ds,
+		fcdssId:     fcdssId,
+		cookie:      cookie,
+		identity:    identity,
+		path:        path,
+		flag:        flag,
+		readOnly:    readOnly,
+		snapshotRef: snapshotRef,
+		mode:        mode,
 	}
 	return params
 }
