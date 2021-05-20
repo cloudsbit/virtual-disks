@@ -51,8 +51,10 @@ func prepareConnectParams(appGlobal ConnectParams) (*C.VixDiskLibConnectParams, 
 	ds := C.CString(appGlobal.ds)
 	fcdssId := C.CString(appGlobal.fcdssId)
 	cookie := C.CString(appGlobal.cookie)
+
 	var cParams = []*C.char{vmxSpec, serverName, thumbPrint, userName, password, fcdId, ds, fcdssId, cookie}
 	// Construct connparams which can be c wrapper used directly
+
 	var cnxParams *C.VixDiskLibConnectParams = C.VixDiskLib_AllocateConnectParams()
 	if appGlobal.fcdId != "" {
 		cnxParams.specType = C.VIXDISKLIB_SPEC_VSTORAGE_OBJECT
@@ -61,16 +63,21 @@ func prepareConnectParams(appGlobal ConnectParams) (*C.VixDiskLibConnectParams, 
 		cnxParams.specType = C.VIXDISKLIB_SPEC_VMX
 		cnxParams.vmxSpec = vmxSpec
 	}
-	cnxParams.thumbPrint = thumbPrint
-	cnxParams.serverName = serverName
+
+	if appGlobal.thumbPrint != "" {
+		cnxParams.thumbPrint = thumbPrint
+	}
+	if appGlobal.serverName != "" {
+		cnxParams.serverName = serverName
+	}
 	//cnxParams.port = 0
 
 	if appGlobal.cookie == "" {
 		cnxParams.credType = C.VIXDISKLIB_CRED_UID
 		C.Params_helper(cnxParams, cookie, userName, password, false, false)
 	} else {
-		cnxParams.credType = C.VIXDISKLIB_CRED_SESSIONID
-		C.Params_helper(cnxParams, cookie, userName, password, false, true)
+		//cnxParams.credType = C.VIXDISKLIB_CRED_SESSIONID
+		//C.Params_helper(cnxParams, cookie, userName, password, false, true)
 	}
 	return cnxParams, cParams
 }
@@ -205,12 +212,16 @@ func Clone(dstConnection VixDiskLibConnection, dstPath string, srcConnection Vix
 }
 
 func prepareCreateParams(createSpec VixDiskLibCreateParams) *C.VixDiskLibCreateParams {
-	var createParams *C.VixDiskLibCreateParams
+	var createParams C.VixDiskLibCreateParams
+
+	//FIXME:
+	// Not sure to free variable
 	createParams.diskType = C.VixDiskLibDiskType(createSpec.diskType)
 	createParams.adapterType = C.VixDiskLibAdapterType(createSpec.adapterType)
 	createParams.hwVersion = C.uint16(createSpec.hwVersion)
 	createParams.capacity = C.VixDiskLibSectorType(createSpec.capacity)
-	return createParams
+
+	return &createParams
 }
 
 func Create(connection VixDiskLibConnection, path string, createParams VixDiskLibCreateParams, progressCallbackData string) VddkError {

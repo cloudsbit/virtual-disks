@@ -5,7 +5,7 @@ import (
 	"github.com/cloudsbit/virtual-disks/pkg/disklib"
 	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
 	log "github.com/sirupsen/logrus"
-	"os"
+	"strconv"
 	"time"
 )
 const LIBRARY_PATH = "LD_LIBRARY_PATH"
@@ -49,22 +49,62 @@ type CbtData struct {
 	Change DiskChangeInfo `json:"DiskChangeInfo"`
 }
 
-type VadpDumper struct  {
+type DumpMode int
+const (
+	DumpBlocks = iota
+	DumpBackup
+	DumpClone
+	DumpResotre
+)
+
+type VddkParams struct  {
 	Identity string
 	VddkVersion
 	ConnParams
-	//DiskParams
+	DiskParams
 	//DiskChangeInfo
 }
 
-func GetThumbPrintForServer(host string, port string) (string, error) {
-	return disklib.GetThumbPrintForServer(host, port)
+type VadpDumper struct  {
+	VddkParams
+	dumpMode   DumpMode
+
+	connParams *disklib.ConnectParams
+	connection *disklib.VixDiskLibConnection
+	diskInfo   *disklib.VixDiskLibInfo
+	diskHandle *virtual_disks.DiskConnectHandle
+
+	ChangeInfo *DiskChangeInfo
+
+	//lConnParams *disklib.ConnectParams
+	//lConnection *disklib.VixDiskLibConnection
+	writeHandle *virtual_disks.DiskConnectHandle
+}
+
+func GetThumbPrintForServer(host string, port int64) (string, error) {
+	strPort := strconv.FormatInt(port, 10)
+	return disklib.GetThumbPrintForServer(host, strPort)
+}
+
+func getDiskLibFlag(mode DumpMode) uint32 {
+	flag := 0
+	if mode == DumpBlocks {
+		flag |= disklib.VIXDISKLIB_FLAG_OPEN_READ_ONLY
+	}
+	return uint32(flag)
+}
+
+func isReadOnly(mode DumpMode) bool {
+	if mode == DumpResotre {
+		return false
+	}
+	return true
 }
 
 func NewConnParams(host string, port int64, name string, password string, moRef string, snapRef string) (*ConnParams, error) {
-	thumbPrint, err := GetThumbPrintForServer(host, string(port))
+	thumbPrint, err := GetThumbPrintForServer(host, port)
 	if err != nil {
-		log.Errorf("Thumbprint for %s:%s failed, err = %s\n", host, port, err)
+		log.Errorf("Thumbprint for %v:%v failed, err = %v\n", host, port, err)
 		return nil, err
 	}
 
@@ -80,16 +120,35 @@ func NewConnParams(host string, port int64, name string, password string, moRef 
 	return params, nil
 }
 
-func NewVadpDumper(ver VddkVersion, conn ConnParams) (*VadpDumper, error) {
-	identity := "rsb_dumper" + time.Now().String()
-	dumper := &VadpDumper{ identity, ver, conn}
+func NewVddkParams(ver VddkVersion, conn ConnParams, disk DiskParams) (*VddkParams, error) {
+	identity := fmt.Sprintf("%v_%v", "rsb_dumper", time.Now().Second())
+	params := &VddkParams{ identity, ver, conn, disk}
+	return params, nil
+}
+
+func NewVadpDumper(params VddkParams, mode DumpMode) (*VadpDumper, error) {
+	connParams := new(disklib.ConnectParams)
+	connection := new(disklib.VixDiskLibConnection)
+	diskInfo   := new(disklib.VixDiskLibInfo)
+	diskHandle := new(virtual_disks.DiskConnectHandle)
+	changeInfo := new(DiskChangeInfo)
+
+	dumper := &VadpDumper{
+		params,
+		mode,
+		connParams,
+		connection,
+		diskInfo,
+		diskHandle,
+		changeInfo,
+		nil,
+		}
 	return dumper, nil
 }
 
-func (d *VadpDumper) ConnectToDisk() error {
+func (d *VadpDumper) ConnectToDisk() (err error) {
 	if res := disklib.Init(d.Major, d.Minor, d.LibPath); res != nil {
-		log.Errorf("disklib.Init: %v", res)
-		return res
+		return fmt.Errorf("disklib.Init: %v", res)
 	}
 
 	vmxSpec    := d.VmMoRef
@@ -98,10 +157,11 @@ func (d *VadpDumper) ConnectToDisk() error {
 	userName   := d.VsphereUsername
 	password   := d.VspherePassword
 	identity   := d.Identity
-	path       := "[hp_stor] rsb_develop/rsb_develop.vmdk" // disk path
-	flag       := uint32(disklib.VIXDISKLIB_FLAG_OPEN_READ_ONLY)
+	path       := d.DiskPathRoot
+	flag       := getDiskLibFlag(d.dumpMode)
+	readOnly   := isReadOnly(d.dumpMode)
 	snapRef    := d.VsphereSnapshotMoRef
-	mode       := disklib.NBD
+	mode       := disklib.NBD // FIXME
 
 	params := disklib.NewConnectParams(
 		vmxSpec,
@@ -116,136 +176,236 @@ func (d *VadpDumper) ConnectToDisk() error {
 		identity,
 		path,
 		flag,
-		false,
+		readOnly,
 		snapRef,
 		mode)
+	d.connParams = &params
+	log.Infof("ConnectParams: %v", params)
 
-	_ = params
+	errVix := disklib.PrepareForAccess(params)
+	if errVix != nil {
+		return fmt.Errorf("PrepareForAccess: %v", errVix)
+	}
+	log.Infof("PrepareForAccess success\n")
+
+	defer func() {
+		if err != nil {
+			disklib.EndAccess(params)
+		}
+	}()
+
+	conn, errVix := disklib.ConnectEx(params)
+	if errVix != nil {
+		return fmt.Errorf("ConnectEx: %v", errVix)
+	}
+	log.Infof("ConnectEx success\n")
+	d.connection = &conn
+
+	defer func() {
+		if err != nil {
+			disklib.Disconnect(conn)
+		}
+	}()
+
+	dli, errVix := disklib.Open(conn, params)
+	if errVix != nil {
+		return fmt.Errorf("Open: %v", errVix)
+	}
+	log.Infof("Open success\n")
+
+	info, errVix := disklib.GetInfo(dli)
+	if errVix != nil {
+		return fmt.Errorf("GetInfo: %v", errVix)
+	}
+	log.Infof("GetInfo: %+v\n", info)
+	d.diskInfo = &info
+
+
+	diskHandle := virtual_disks.NewDiskHandle(dli, conn, params, info)
+	d.diskHandle = &diskHandle
+
+	d.ChangeInfo.StartOffset = 0
+	d.ChangeInfo.Length = diskHandle.Capacity()
 	return nil
 }
 
+func (d *VadpDumper) Cleanup() {
+	disklib.Disconnect(*d.connection)
+	disklib.EndAccess(*d.connParams)
+}
 
-func main() {
-	vmLibPath := "/usr/local/vmware-vix-disklib-distrib/lib64"
-	sysLibPath := os.Getenv(LIBRARY_PATH)
-	os.Setenv(LIBRARY_PATH, fmt.Sprintf("%s:%s", vmLibPath, sysLibPath))
+func (d *VadpDumper) QueryAllocatedBlocks() (err error) {
 
-	var majorVersion uint32 = 7
-	var minorVersion uint32 = 0
+	sectorSize  := int64(disklib.VIXDISKLIB_SECTOR_SIZE)
+	blockSize   := uint64(2*1024) // 1MB block size
+	blockCount  := uint64(d.diskInfo.Capacity) / blockSize
+	maxChunkNum := uint64(disklib.VIXDISKLIB_MAX_CHUNK_NUMBER)
+	log.Debugf("Current chunk info: chunk size: %v, chunk count: %v, Max count: %v", blockSize, blockSize, maxChunkNum)
 
-	if res := disklib.Init(majorVersion, minorVersion, vmLibPath); res != nil {
-		log.Fatalf("disklib.Init: %v", res)
+	offset := uint64(0)
+	for blockCount > 0 {
+		onceCount := blockCount
+		if blockCount > maxChunkNum {
+			onceCount = maxChunkNum
+		}
+
+		startSector := disklib.VixDiskLibSectorType(offset)
+		numSectors  := disklib.VixDiskLibSectorType(onceCount*blockSize)
+		chunkSize   := disklib.VixDiskLibSectorType(blockSize)
+
+		blockList, errVix := d.diskHandle.QueryAllocatedBlocks(startSector, numSectors, chunkSize)
+		if errVix != nil {
+			return fmt.Errorf("QueryAllocatedBlocks: %v", errVix)
+		}
+
+		for _, block := range blockList {
+			//log.Printf("%+v\n", block)
+			changed := ChangedArea{
+				Start:  int64(block.Offset()) * sectorSize,
+				Length: int64(block.Length()) * sectorSize,
+			}
+			d.ChangeInfo.ChangedArea = append(d.ChangeInfo.ChangedArea, changed)
+		}
+
+		blockCount -= onceCount
+		offset += onceCount * blockSize
 	}
 
-	host := "192.168.1.100"
-	port := "443"
-	thumbPrint, err := disklib.GetThumbPrintForServer(host, port)
-	if err != nil {
-		log.Fatalf("Thumbprint for %s:%s failed, err = %s\n", host, port, err)
-	}
-	log.Printf("thumbprint: %v", thumbPrint)
+	log.Infof("All ChangeInfo: \n%v\n", d.ChangeInfo)
+	return nil
+}
 
-	vmxSpec  := "moref=vm-972" // Dev-RSB
-	userName := "administrator@vsphere.local"
-	password := "Jrsa1234/"
-	ds       := "datastore-944"
-	identity := "RunStor-20210518"
-	path     := "[hp_stor] rsb_develop/rsb_develop.vmdk" // disk path
-	flag     := uint32(disklib.VIXDISKLIB_FLAG_OPEN_READ_ONLY)
-	snapRef  := "snapshot-1102"
-	mode     := disklib.NBD
+func (d *VadpDumper) CreateLocalDisk(diskName string, diskLen uint64) (err error) {
+	if res := disklib.Init(d.Major, d.Minor, d.LibPath); res != nil {
+		return fmt.Errorf("disklib.Init: %v", res)
+	}
+	//params := disklib.ConnectParams{}
+
+	vmxSpec    := ""
+	servName   := ""
+	thumbPrint := ""
+	userName   := ""
+	password   := ""
+	identity   := ""
+	path       := diskName
+	flag       := uint32(0)
+	readOnly   := false
+	snapRef    := ""
+	mode       := ""
 
 	params := disklib.NewConnectParams(
 		vmxSpec,
-		host,
+		servName,
 		thumbPrint,
 		userName,
 		password,
 		"",
-		ds,
+		"",
 		"",
 		"",
 		identity,
 		path,
 		flag,
-		false,
+		readOnly,
 		snapRef,
 		mode)
 
-	errVix := disklib.PrepareForAccess(params)
+	conn, errVix := disklib.Connect(params)
 	if errVix != nil {
-		fmt.Printf("Prepare for access failed. Error code: %d, error message: %s.\n", errVix.VixErrorCode(), errVix.Error())
-		return
+		return fmt.Errorf("Connect: %v\n", errVix)
 	}
-	fmt.Printf("PrepareForAccess success\n")
+	log.Infof("Connect success\n")
 
-	conn, errVix := disklib.ConnectEx(params)
+	diskType    := disklib.VIXDISKLIB_DISK_VMFS_FLAT
+	adapterType := disklib.VIXDISKLIB_ADAPTER_SCSI_LSILOGIC
+	hwVersion   := uint16(7)
+	capacity    := disklib.VixDiskLibSectorType(diskLen / disklib.VIXDISKLIB_SECTOR_SIZE)
+
+	createParams := disklib.NewCreateParams(
+		diskType,
+		adapterType,
+		hwVersion,
+		capacity,
+	)
+
+	errVix = disklib.Create(conn, diskName, createParams, "")
 	if errVix != nil {
-		fmt.Printf("Connect to vixdisk lib failed. Error code: %d, error message: %s.\n", errVix.VixErrorCode(), errVix.Error())
-		return
+		return fmt.Errorf("Create: %v\n", errVix)
 	}
-	fmt.Printf("ConnectEx success\n")
+	log.Infof("Create success\n")
 
-	defer disklib.Disconnect(conn)
-	defer disklib.EndAccess(params)
-
+	// Open local disk
 	dli, errVix := disklib.Open(conn, params)
 	if errVix != nil {
-		fmt.Printf("Open disk error. Error code: %d, error message: %s.\n", errVix.VixErrorCode(), errVix.Error())
-		return
+		return fmt.Errorf("Open: %v", errVix)
 	}
-
-	fmt.Printf("Open success\n")
+	log.Infof("Open success\n")
 
 	info, errVix := disklib.GetInfo(dli)
 	if errVix != nil {
-		fmt.Printf("Get disk info failed. Error code: %d, error message: %s.\n", errVix.VixErrorCode(), errVix.Error())
-		return
+		return fmt.Errorf("GetInfo: %v", errVix)
 	}
-	fmt.Printf("Disk-Info: %+v\n", info)
+	log.Infof("Local GetInfo: %+v\n", info)
 
 	diskHandle := virtual_disks.NewDiskHandle(dli, conn, params, info)
-
-	chunkSize  := 2048 // 1MB block size
-	numSectors := diskHandle.Capacity() / disklib.VIXDISKLIB_SECTOR_SIZE
-	fmt.Printf("Current Chunk info: chunkSize: %v, numSectors: %v, MAX: %v\n", chunkSize, numSectors, disklib.VIXDISKLIB_MAX_CHUNK_NUMBER)
-
-	blockList, errVix := diskHandle.QueryAllocatedBlocks(0, disklib.VixDiskLibSectorType(numSectors), disklib.VixDiskLibSectorType(chunkSize))
-	if errVix != nil {
-		fmt.Printf("QueryAllocatedBlocks. Error code: %d, error message: %s.\n", errVix.VixErrorCode(), errVix.Error())
-		return
-	}
-	fmt.Printf("Number of blocks: %d\n", len(blockList))
-	fmt.Printf("Offset      Length\n")
-	for _, ab := range blockList {
-		fmt.Printf("%+v\n", ab)
-	}
-
-	//disklib.Disconnect(conn)
-	//fmt.Printf("DisConnect success\n")
-
-	//disklib.EndAccess(params)
-	//fmt.Printf("EndAccess success\n")
-
-	// 打开disk
-	//diskReaderWriter, errVix := virtual_disks.Open(params, logrus.New())
-	//if errVix != nil {
-	//	disklib.EndAccess(params)
-	//	fmt.Printf("Open failed, got error code: %d, error message: %s.", errVix.VixErrorCode(), errVix.Error())
-	//	return
-	//}
-
-	//// QAB (assume at least 1GiB volume and 1MiB block size)
-	//abInitial, errVix := diskReaderWriter.QueryAllocatedBlocks(0, 2048*1024, 2048)
-	//if errVix != nil {
-	//	fmt.Printf("QueryAllocatedBlocks failed: %d, error message: %s", errVix.VixErrorCode(), errVix.Error())
-	//} else {
-	//	fmt.Printf("Number of blocks: %d\n", len(abInitial))
-	//	fmt.Printf("Offset      Length\n")
-	//	for _, ab := range abInitial {
-	//		fmt.Printf("0x%012x  0x%012x\n", ab.Offset(), ab.Length())
-	//	}
-	//}
-	//diskReaderWriter.Close()
-
+	d.writeHandle = &diskHandle
+	return nil
 }
+
+func (d *VadpDumper) ReadFromVmdk(buf []byte, offset int64) (n int, err error) {
+	return d.diskHandle.ReadAt(buf, offset)
+}
+
+func (d *VadpDumper) WriteToVmdk(buf []byte, offset int64) (n int, err error) {
+	return d.writeHandle.WriteAt(buf, offset)
+}
+
+func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
+	//sectorPer   := 1024
+	sectorSize  := (disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2)
+	startOffset := dc.StartOffset
+
+	//FIXME:
+	// 待明确的地方， ReadAt的用法，没有限制长度的参数，读写数据是否有保证?
+
+	// 这里默认的buffer为1 sector
+	buffer := make([]byte, sectorSize)
+	for _, area := range dc.ChangedArea {
+		offsetLen  := area.Length
+		currOffset := startOffset + area.Start
+		maxOffset  := currOffset + offsetLen
+
+		log.Infof("CURRENT AREA: %+v", area)
+
+		for currOffset < maxOffset {
+			//log.Infof("currOffset: %v, maxOffse: %v", currOffset, maxOffset)
+			readLen, err := d.ReadFromVmdk(buffer, currOffset)
+			if err != nil {
+				return fmt.Errorf("ReadFromVmdk: %v", err)
+			}
+			if readLen != sectorSize {
+				log.Warnf("readLen: %v, sectorSize: %v", readLen, sectorSize)
+			}
+
+			writeLen, err := d.WriteToVmdk(buffer, currOffset)
+			if err != nil {
+				return fmt.Errorf("WriteToVmdk: %v", err)
+			}
+
+			currOffset += int64(readLen)
+			maxOffset  -= int64(readLen)
+			if readLen != writeLen || readLen != sectorSize {
+				log.Warnf("readLen: %v, writeLen: %v, sectorSize: %v", readLen, writeLen, sectorSize)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *VadpDumper) DumpBackupDisk() (err error) {
+
+	return nil
+}
+
+
