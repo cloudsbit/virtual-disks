@@ -1,6 +1,7 @@
 package dumper
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/cloudsbit/virtual-disks/pkg/disklib"
 	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
@@ -8,7 +9,6 @@ import (
 	"strconv"
 	"time"
 )
-const LIBRARY_PATH = "LD_LIBRARY_PATH"
 
 type VddkVersion struct {
 	Major   uint32
@@ -19,7 +19,7 @@ type VddkVersion struct {
 type ConnParams struct {
 	VmMoRef              string `json:"VmMoRef"`
 	VsphereHostName      string `json:"VsphereHostName"`
-	VsphereHostPort      int64  `json:"VsphereHostPort"`
+	VsphereHostPort      int    `json:"VsphereHostPort"`
 	VsphereUsername      string `json:"VsphereUsername"`
 	VspherePassword      string `json:"VspherePassword"`
 	VsphereThumbPrint    string `json:"VsphereThumbPrint"`
@@ -77,31 +77,42 @@ type VadpDumper struct  {
 	ChangeInfo *DiskChangeInfo
 
 	//lConnParams *disklib.ConnectParams
-	//lConnection *disklib.VixDiskLibConnection
+	lConnection *disklib.VixDiskLibConnection
 	writeHandle *virtual_disks.DiskConnectHandle
 }
 
-func GetThumbPrintForServer(host string, port int64) (string, error) {
-	strPort := strconv.FormatInt(port, 10)
+func ParseCbtData(conf string) (*CbtData, error) {
+	cbtData := &CbtData{}
+	if err := json.Unmarshal([]byte(conf), cbtData); err != nil {
+		//FIXME:
+		//return nil, err
+	}
+	return cbtData, nil
+}
+
+func GetThumbPrintForServer(host string, port int) (string, error) {
+	strPort := strconv.FormatInt(int64(port), 10)
 	return disklib.GetThumbPrintForServer(host, strPort)
 }
 
 func getDiskLibFlag(mode DumpMode) uint32 {
+	// only for vsphere VM
 	flag := 0
-	if mode == DumpBlocks {
+	if mode == DumpBlocks || mode == DumpBackup {
 		flag |= disklib.VIXDISKLIB_FLAG_OPEN_READ_ONLY
 	}
 	return uint32(flag)
 }
 
 func isReadOnly(mode DumpMode) bool {
+	// only for vsphere VM
 	if mode == DumpResotre {
 		return false
 	}
 	return true
 }
 
-func NewConnParams(host string, port int64, name string, password string, moRef string, snapRef string) (*ConnParams, error) {
+func NewConnParams(host string, port int, name string, password string, moRef string, snapRef string) (*ConnParams, error) {
 	thumbPrint, err := GetThumbPrintForServer(host, port)
 	if err != nil {
 		log.Errorf("Thumbprint for %v:%v failed, err = %v\n", host, port, err)
@@ -117,6 +128,7 @@ func NewConnParams(host string, port int64, name string, password string, moRef 
 		VsphereThumbPrint: thumbPrint,
 		VsphereSnapshotMoRef: snapRef,
 	}
+
 	return params, nil
 }
 
@@ -141,6 +153,7 @@ func NewVadpDumper(params VddkParams, mode DumpMode) (*VadpDumper, error) {
 		diskInfo,
 		diskHandle,
 		changeInfo,
+		nil,
 		nil,
 		}
 	return dumper, nil
@@ -232,6 +245,10 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 func (d *VadpDumper) Cleanup() {
 	disklib.Disconnect(*d.connection)
 	disklib.EndAccess(*d.connParams)
+
+	if d.lConnection != nil {
+		disklib.Disconnect(*d.lConnection)
+	}
 }
 
 func (d *VadpDumper) QueryAllocatedBlocks() (err error) {
@@ -314,7 +331,9 @@ func (d *VadpDumper) CreateLocalDisk(diskName string, diskLen uint64) (err error
 	if errVix != nil {
 		return fmt.Errorf("Connect: %v\n", errVix)
 	}
+
 	log.Infof("Connect success\n")
+	d.lConnection = &conn
 
 	diskType    := disklib.VIXDISKLIB_DISK_VMFS_FLAT
 	adapterType := disklib.VIXDISKLIB_ADAPTER_SCSI_LSILOGIC
@@ -362,7 +381,7 @@ func (d *VadpDumper) WriteToVmdk(buf []byte, offset int64) (n int, err error) {
 
 func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 	//sectorPer   := 1024
-	sectorSize  := (disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2)
+	sectorSize  := disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2
 	startOffset := dc.StartOffset
 
 	//FIXME:
@@ -399,7 +418,6 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 			}
 		}
 	}
-
 	return nil
 }
 
