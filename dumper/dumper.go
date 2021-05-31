@@ -235,7 +235,12 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 
 
 	diskHandle := virtual_disks.NewDiskHandle(dli, conn, params, info)
-	d.diskHandle = &diskHandle
+
+	if d.dumpMode == DumpResotre {
+		d.writeHandle = &diskHandle
+	} else {
+		d.diskHandle = &diskHandle
+	}
 
 	d.ChangeInfo.StartOffset = 0
 	d.ChangeInfo.Length = diskHandle.Capacity()
@@ -289,6 +294,66 @@ func (d *VadpDumper) QueryAllocatedBlocks() (err error) {
 	}
 
 	log.Infof("All ChangeInfo: \n%v\n", d.ChangeInfo)
+	return nil
+}
+
+func (d *VadpDumper) OpenLocalDisk(diskName string) (err error) {
+	if res := disklib.Init(d.Major, d.Minor, d.LibPath); res != nil {
+		return fmt.Errorf("disklib.Init: %v", res)
+	}
+
+	vmxSpec    := ""
+	servName   := ""
+	thumbPrint := ""
+	userName   := ""
+	password   := ""
+	identity   := ""
+	path       := diskName
+	flag       := uint32(0)
+	readOnly   := true
+	snapRef    := ""
+	mode       := ""
+
+	params := disklib.NewConnectParams(
+		vmxSpec,
+		servName,
+		thumbPrint,
+		userName,
+		password,
+		"",
+		"",
+		"",
+		"",
+		identity,
+		path,
+		flag,
+		readOnly,
+		snapRef,
+		mode)
+
+	conn, errVix := disklib.Connect(params)
+	if errVix != nil {
+		return fmt.Errorf("Connect: %v\n", errVix)
+	}
+
+	log.Infof("Connect success\n")
+	d.lConnection = &conn
+
+	// Open local disk
+	dli, errVix := disklib.Open(conn, params)
+	if errVix != nil {
+		return fmt.Errorf("Open: %v", errVix)
+	}
+	log.Infof("Open success\n")
+
+	info, errVix := disklib.GetInfo(dli)
+	if errVix != nil {
+		return fmt.Errorf("GetInfo: %v", errVix)
+	}
+	log.Infof("Local GetInfo: %+v\n", info)
+
+	diskHandle := virtual_disks.NewDiskHandle(dli, conn, params, info)
+	d.diskHandle = &diskHandle
 	return nil
 }
 
@@ -426,4 +491,7 @@ func (d *VadpDumper) DumpBackupDisk() (err error) {
 	return nil
 }
 
+func (d *VadpDumper) DumpRestoreDisk(dc *DiskChangeInfo) (err error) {
+	return d.DumpCloneDisk(dc)
+}
 
