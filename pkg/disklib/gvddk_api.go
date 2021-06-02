@@ -345,11 +345,24 @@ func GetTransportMode(diskHandle VixDiskLibHandle) string {
 	return mode
 }
 
-func GetMetadataKeys(diskHandle VixDiskLibHandle, buf []byte, bufLen uint, requireLen uint) VddkError {
-	cbuf := ((*C.char)(unsafe.Pointer(&buf[0])))
-	res := C.GetMetadataKeys(diskHandle.dli, cbuf, C.size_t(bufLen), C.size_t(requireLen))
-	if res != 0 {
-		return NewVddkError(uint64(res), fmt.Sprintf("GetMetadataKeys failed. The error code is %d.", res))
+func GetMetadataKeys(diskHandle VixDiskLibHandle, buf []byte, bufLen uint, requireLen *uint) VddkError {
+	if requireLen != nil {
+		required := C.size_t(*requireLen)
+		res := C.GetMetadataKeys(diskHandle.dli, nil, C.size_t(0), &required)
+		if res != 0 {
+			if res == VIX_E_BUFFER_TOOSMALL {
+				*requireLen = uint(required)
+			}
+			return NewVddkError(uint64(res), fmt.Sprintf("GetMetadataKeys failed. The error code is %d.", res))
+		}
+
+	} else {
+		cbuf := ((*C.char)(unsafe.Pointer(&buf[0])))
+		res := C.GetMetadataKeys(diskHandle.dli, cbuf, C.size_t(bufLen), nil)
+		if res != 0 {
+			return NewVddkError(uint64(res), fmt.Sprintf("GetMetadataKeys failed. The error code is %d.", res))
+		}
+		//fmt.Printf("C.GetMetadataKeys: %v\n", *cbuf)
 	}
 	return nil
 }
@@ -362,27 +375,42 @@ func Close(diskHandle VixDiskLibHandle) VddkError {
 	return nil
 }
 
-func WriteMetadata(diskHandle VixDiskLibHandle, key string, val string) VddkError {
-	w_key := C.CString(key)
-	defer C.free(unsafe.Pointer(w_key))
-	w_val := C.CString(val)
-	defer C.free(unsafe.Pointer(w_val))
-	res := C.VixDiskLib_WriteMetadata(diskHandle.dli, w_key, w_val)
+func WriteMetadata(diskHandle VixDiskLibHandle, key string, buf []byte) VddkError {
+	wKey := C.CString(key)
+	defer C.free(unsafe.Pointer(wKey))
+
+	cbuf := ((*C.char)(unsafe.Pointer(&buf[0])))
+	res := C.VixDiskLib_WriteMetadata(diskHandle.dli, wKey, cbuf)
 	if res != 0 {
 		return NewVddkError(uint64(res), fmt.Sprintf("Write meta data failed. The error code is %d.", res))
 	}
 	return nil
 }
 
-func ReadMetadata(diskHandle VixDiskLibHandle, key string, buf []byte, bufLen uint, requiredLen uint) VddkError {
-	readKey := C.CString(key)
-	defer C.free(unsafe.Pointer(readKey))
-	cbuf := ((*C.char)(unsafe.Pointer(&buf[0])))
-	required := C.size_t(requiredLen)
-	res := C.VixDiskLib_ReadMetadata(diskHandle.dli, readKey, cbuf, C.size_t(bufLen), &required)
-	if res != 0 {
-		return NewVddkError(uint64(res), fmt.Sprintf("Read meta data from virtual disk file failed. The error code is %d.", res))
+func ReadMetadata(diskHandle VixDiskLibHandle, key string, buf []byte, bufLen uint, requiredLen *uint) VddkError {
+	if requiredLen != nil {
+		readKey := C.CString(key)
+		defer C.free(unsafe.Pointer(readKey))
+
+		required := C.size_t(*requiredLen)
+		res := C.VixDiskLib_ReadMetadata(diskHandle.dli, readKey, nil, C.size_t(0), &required)
+		if res != 0 {
+			if res == VIX_E_BUFFER_TOOSMALL {
+				*requiredLen = uint(required)
+			}
+			return NewVddkError(uint64(res), fmt.Sprintf("Read meta data from virtual disk file failed. The error code is %d.", res))
+		}
+	} else {
+		readKey := C.CString(key)
+		defer C.free(unsafe.Pointer(readKey))
+
+		cbuf := ((*C.char)(unsafe.Pointer(&buf[0])))
+		res := C.VixDiskLib_ReadMetadata(diskHandle.dli, readKey, cbuf, C.size_t(bufLen), nil)
+		if res != 0 {
+			return NewVddkError(uint64(res), fmt.Sprintf("Read meta data from virtual disk file failed. The error code is %d.", res))
+		}
 	}
+
 	return nil
 }
 

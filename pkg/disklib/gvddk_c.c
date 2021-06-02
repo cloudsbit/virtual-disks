@@ -141,10 +141,11 @@ VixError Cleanup(VixDiskLibConnectParams *connectParams, uint32 numCleanedUp, ui
     return error;
 }
 
-VixError GetMetadataKeys(VixDiskLibHandle diskHandle, char *buf, size_t bufLen, size_t required)
+VixError GetMetadataKeys(VixDiskLibHandle diskHandle, char *buf, size_t bufLen, size_t *required)
 {
     VixError error;
-    error = VixDiskLib_GetMetadataKeys(diskHandle, buf, bufLen, &required);
+    error = VixDiskLib_GetMetadataKeys(diskHandle, buf, bufLen, required);
+    //printf("VixDiskLib_GetMetadataKeys: %s\n", buf);
     return error;
 }
 

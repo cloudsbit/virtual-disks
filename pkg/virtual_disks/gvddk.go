@@ -342,3 +342,16 @@ func (this DiskConnectHandle) Capacity() int64 {
 func (this DiskConnectHandle) QueryAllocatedBlocks(startSector disklib.VixDiskLibSectorType, numSectors disklib.VixDiskLibSectorType, chunkSize disklib.VixDiskLibSectorType) ([]disklib.VixDiskLibBlock, disklib.VddkError) {
 	return disklib.QueryAllocatedBlocks(this.dli, startSector, numSectors, chunkSize)
 }
+
+func (this DiskConnectHandle) GetMetadataKeys(buf []byte, bufLen uint, requireLen *uint) disklib.VddkError {
+	return disklib.GetMetadataKeys(this.dli, buf, bufLen, requireLen)
+}
+
+func (this DiskConnectHandle) ReadMetadata(key string, buf []byte, bufLen uint, requiredLen *uint) disklib.VddkError {
+	return disklib.ReadMetadata(this.dli, key, buf, bufLen, requiredLen)
+}
+
+func (this DiskConnectHandle) WriteMetadata(key string, buf []byte) disklib.VddkError {
+	return disklib.WriteMetadata(this.dli, key, buf)
+}
+

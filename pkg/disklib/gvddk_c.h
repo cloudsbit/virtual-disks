@@ -45,7 +45,7 @@ VixError Grow(VixDiskLibConnection connection, char* path, VixDiskLibSectorType 
 VixError Shrink(VixDiskLibHandle diskHandle, void *progressCallbackData);
 VixError CheckRepair(VixDiskLibConnection connection, char *file, bool repair);
 VixError Cleanup(VixDiskLibConnectParams *connectParams, uint32 numCleanedUp, uint32 numRemaining);
-VixError GetMetadataKeys(VixDiskLibHandle diskHandle, char *buf, size_t bufLen, size_t required);
+VixError GetMetadataKeys(VixDiskLibHandle diskHandle, char *buf, size_t bufLen, size_t *required);
 VixError Clone(VixDiskLibConnection dstConn, char *dstPath, VixDiskLibConnection srcConn, char *srcPath, VixDiskLibCreateParams *createParams,
                void *progressCallbackData, bool overWrite);
 VixError QueryAllocatedBlocks(VixDiskLibHandle diskHandle, VixDiskLibSectorType startSector,

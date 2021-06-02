@@ -1,6 +1,7 @@
 package dumper
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/cloudsbit/virtual-disks/pkg/disklib"
@@ -139,22 +140,24 @@ func NewVddkParams(ver VddkVersion, conn ConnParams, disk DiskParams) (*VddkPara
 }
 
 func NewVadpDumper(params VddkParams, mode DumpMode) (*VadpDumper, error) {
-	connParams := new(disklib.ConnectParams)
-	connection := new(disklib.VixDiskLibConnection)
-	diskInfo   := new(disklib.VixDiskLibInfo)
-	diskHandle := new(virtual_disks.DiskConnectHandle)
-	changeInfo := new(DiskChangeInfo)
+	connParams  := new(disklib.ConnectParams)
+	connection  := new(disklib.VixDiskLibConnection)
+	diskInfo    := new(disklib.VixDiskLibInfo)
+	diskHandle  := new(virtual_disks.DiskConnectHandle)
+	changeInfo  := new(DiskChangeInfo)
+	lConnection := new(disklib.VixDiskLibConnection)
+	writeHandle := new(virtual_disks.DiskConnectHandle)
 
 	dumper := &VadpDumper{
 		params,
 		mode,
 		connParams,
 		connection,
-		diskInfo,
+		  diskInfo,
 		diskHandle,
 		changeInfo,
-		nil,
-		nil,
+		lConnection,
+		writeHandle,
 		}
 	return dumper, nil
 }
@@ -248,12 +251,13 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 }
 
 func (d *VadpDumper) Cleanup() {
-	disklib.Disconnect(*d.connection)
-	disklib.EndAccess(*d.connParams)
-
-	if d.lConnection != nil {
-		disklib.Disconnect(*d.lConnection)
+	if d.diskHandle != nil {
+		d.diskHandle.Close()
 	}
+	if d.writeHandle != nil {
+		d.writeHandle.Close()
+	}
+	disklib.Exit()
 }
 
 func (d *VadpDumper) QueryAllocatedBlocks() (err error) {
@@ -294,6 +298,62 @@ func (d *VadpDumper) QueryAllocatedBlocks() (err error) {
 	}
 
 	log.Infof("All ChangeInfo: \n%v\n", d.ChangeInfo)
+	return nil
+}
+
+
+func NullTermToStrings(b []byte) (s []string) {
+	// ref: Converting NULL terminated []byte to []string: https://groups.google.com/g/golang-nuts/c/E4Zhmc5xGus
+	for {
+		i := bytes.IndexByte(b, byte('\x00')) // why '\0' ???
+		if i == -1 {
+			break
+		}
+		s = append(s, string(b[0:i]))
+		b = b[i+1:]
+	}
+	return
+}
+
+func (d *VadpDumper) SaveMetaData() (err error) {
+	var requireLen uint
+
+	// 获取需要的长度
+	errVix := d.diskHandle.GetMetadataKeys( nil, 0, &requireLen)
+	if errVix != nil && errVix.VixErrorCode() != disklib.VIX_E_BUFFER_TOOSMALL {
+		return fmt.Errorf("GetMetadataKeys: %v", errVix.Error())
+	}
+	log.Infof("SaveMetaData: %v\n", requireLen)
+
+	// 读取MetedataKeys
+	bufLen := requireLen
+	buf := make([]byte, bufLen)
+
+	errVix = d.diskHandle.GetMetadataKeys(buf, bufLen, nil)
+	if errVix != nil {
+		return fmt.Errorf("GetMetadataKeys: %v", errVix.Error())
+	}
+
+	keys := NullTermToStrings(buf)
+	log.Infof("MetadataKeysXXX: [%s]\n", keys)
+
+	for _, key := range keys {
+		errVix := d.diskHandle.ReadMetadata( key, nil, 0, &requireLen)
+		if errVix != nil && errVix.VixErrorCode() != disklib.VIX_E_BUFFER_TOOSMALL {
+			return fmt.Errorf("ReadMetadata: %v", errVix.Error())
+		}
+		log.Infof("Key: %v, RequireLen: %v", key, requireLen)
+
+		bufLen = requireLen
+		buf = make([]byte, bufLen)
+
+		errVix = d.diskHandle.ReadMetadata( key, buf, bufLen, nil)
+		if errVix != nil {
+			return fmt.Errorf("ReadMetadata: %v", errVix.Error())
+		}
+		log.Infof("Key: %v, Buf: %v", key, string(buf[:]))
+	}
+
 	return nil
 }
 
@@ -446,39 +506,41 @@ func (d *VadpDumper) WriteToVmdk(buf []byte, offset int64) (n int, err error) {
 
 func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 	//sectorPer   := 1024
-	sectorSize  := disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2
+	//sectorSize  := disklib.VIXDISKLIB_SECTOR_SIZE
+
+	// NOTE:
+	// 每次读的大小为1MB, 也就是(2048个扇区, 每个扇区512Byte)
+	sectorSize  := int64(disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2)
 	startOffset := dc.StartOffset
 
 	//FIXME:
 	// 待明确的地方， ReadAt的用法，没有限制长度的参数，读写数据是否有保证?
-
-	// 这里默认的buffer为1 sector
-	buffer := make([]byte, sectorSize)
+	block  := make([]byte, sectorSize)
+	buffer := block
 	for _, area := range dc.ChangedArea {
-		offsetLen  := area.Length
-		currOffset := startOffset + area.Start
-		maxOffset  := currOffset + offsetLen
-
 		log.Infof("CURRENT AREA: %+v", area)
+		currOffset := startOffset + area.Start
+		offsetLen  := area.Length
 
+		maxOffset  := currOffset + offsetLen
 		for currOffset < maxOffset {
-			//log.Infof("currOffset: %v, maxOffse: %v", currOffset, maxOffset)
+			if maxOffset - currOffset < sectorSize {
+				buffer = make([]byte, maxOffset-currOffset)
+			} else {
+				buffer = block
+			}
+
 			readLen, err := d.ReadFromVmdk(buffer, currOffset)
 			if err != nil {
 				return fmt.Errorf("ReadFromVmdk: %v", err)
 			}
-			if readLen != sectorSize {
-				log.Warnf("readLen: %v, sectorSize: %v", readLen, sectorSize)
-			}
-
 			writeLen, err := d.WriteToVmdk(buffer, currOffset)
 			if err != nil {
 				return fmt.Errorf("WriteToVmdk: %v", err)
 			}
 
 			currOffset += int64(readLen)
-			maxOffset  -= int64(readLen)
-			if readLen != writeLen || readLen != sectorSize {
+			if readLen != writeLen || int64(readLen) != sectorSize {
 				log.Warnf("readLen: %v, writeLen: %v, sectorSize: %v", readLen, writeLen, sectorSize)
 			}
 		}
