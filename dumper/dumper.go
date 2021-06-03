@@ -8,6 +8,7 @@ import (
 	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
 	log "github.com/sirupsen/logrus"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -223,6 +224,27 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 		}
 	}()
 
+	//if d.dumpMode == DumpResotre {
+	//	diskName := d.DiskPathRoot
+
+	//	diskType    := disklib.VIXDISKLIB_DISK_VMFS_FLAT
+	//	adapterType := disklib.VIXDISKLIB_ADAPTER_SCSI_LSILOGIC
+	//	hwVersion   := uint16(7)
+	//	capacity    := disklib.VixDiskLibSectorType(d.ChangeInfo.Length / disklib.VIXDISKLIB_SECTOR_SIZE)
+
+	//	createParams := disklib.NewCreateParams(
+	//		diskType,
+	//		adapterType,
+	//		hwVersion,
+	//		capacity,
+	//	)
+	//	errVix = disklib.Create(conn, diskName, createParams, "")
+	//	if errVix != nil {
+	//		return fmt.Errorf("Create: %v\n", errVix)
+	//	}
+	//	log.Infof("Create success\n")
+	//}
+
 	dli, errVix := disklib.Open(conn, params)
 	if errVix != nil {
 		return fmt.Errorf("Open: %v", errVix)
@@ -338,6 +360,10 @@ func (d *VadpDumper) SaveMetaData() (err error) {
 	log.Infof("MetadataKeysXXX: [%s]\n", keys)
 
 	for _, key := range keys {
+		if len(strings.TrimSpace(key)) == 0 {
+			continue
+		}
+
 		errVix := d.diskHandle.ReadMetadata( key, nil, 0, &requireLen)
 		if errVix != nil && errVix.VixErrorCode() != disklib.VIX_E_BUFFER_TOOSMALL {
 			return fmt.Errorf("ReadMetadata: %v", errVix.Error())
@@ -352,6 +378,12 @@ func (d *VadpDumper) SaveMetaData() (err error) {
 			return fmt.Errorf("ReadMetadata: %v", errVix.Error())
 		}
 		log.Infof("Key: %v, Buf: %v", key, string(buf[:]))
+
+		errVix = d.writeHandle.WriteMetadata(key, buf)
+		if errVix != nil {
+			return fmt.Errorf("WriteMetadata: %v", errVix.Error())
+		}
+
 	}
 
 	return nil
