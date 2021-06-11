@@ -51,6 +51,7 @@ type CbtData struct {
 	Change DiskChangeInfo `json:"DiskChangeInfo"`
 }
 
+
 type DumpMode int
 const (
 	DumpBlocks = iota
@@ -67,6 +68,7 @@ type VddkParams struct  {
 	//DiskChangeInfo
 }
 
+
 type VadpDumper struct  {
 	VddkParams
 	dumpMode   DumpMode
@@ -77,6 +79,7 @@ type VadpDumper struct  {
 	diskHandle *virtual_disks.DiskConnectHandle
 
 	ChangeInfo *DiskChangeInfo
+	Progress   *DiskProgress
 
 	//lConnParams *disklib.ConnectParams
 	lConnection *disklib.VixDiskLibConnection
@@ -146,6 +149,7 @@ func NewVadpDumper(params VddkParams, mode DumpMode) (*VadpDumper, error) {
 	diskInfo    := new(disklib.VixDiskLibInfo)
 	diskHandle  := new(virtual_disks.DiskConnectHandle)
 	changeInfo  := new(DiskChangeInfo)
+	progress    := new(DiskProgress)
 	lConnection := new(disklib.VixDiskLibConnection)
 	writeHandle := new(virtual_disks.DiskConnectHandle)
 
@@ -157,6 +161,7 @@ func NewVadpDumper(params VddkParams, mode DumpMode) (*VadpDumper, error) {
 		  diskInfo,
 		diskHandle,
 		changeInfo,
+		progress,
 		lConnection,
 		writeHandle,
 		}
@@ -540,6 +545,12 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 	//sectorPer   := 1024
 	//sectorSize  := disklib.VIXDISKLIB_SECTOR_SIZE
 
+	estimate := GetEstimateSize(dc)
+	capacity := uint64(dc.Length)
+
+	d.Progress.SetCapacitySize(capacity)
+	d.Progress.SetEstimateSize(estimate)
+
 	// NOTE:
 	// 每次读的大小为1MB, 也就是(2048个扇区, 每个扇区512Byte)
 	sectorSize  := int64(disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2)
@@ -551,8 +562,10 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 	buffer := block
 	for _, area := range dc.ChangedArea {
 		log.Infof("CURRENT AREA: %+v", area)
+
 		currOffset := startOffset + area.Start
 		offsetLen  := area.Length
+
 
 		maxOffset  := currOffset + offsetLen
 		for currOffset < maxOffset {
@@ -575,6 +588,9 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 			if readLen != writeLen || int64(readLen) != sectorSize {
 				log.Warnf("readLen: %v, writeLen: %v, sectorSize: %v", readLen, writeLen, sectorSize)
 			}
+
+			d.Progress.SetProcessedSize(uint64(currOffset))
+			d.Progress.UpdateFinishedSize(uint64(readLen))
 		}
 	}
 	return nil
