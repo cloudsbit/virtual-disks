@@ -7,6 +7,7 @@ import (
 	"github.com/cloudsbit/virtual-disks/pkg/disklib"
 	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
 	log "github.com/sirupsen/logrus"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -138,7 +139,8 @@ func NewConnParams(host string, port int, name string, password string, moRef st
 }
 
 func NewVddkParams(ver VddkVersion, conn ConnParams, disk DiskParams) (*VddkParams, error) {
-	identity := fmt.Sprintf("%v_%v", "rsb_dumper", time.Now().Second())
+	rand.Seed(time.Now().UnixNano())
+	identity := fmt.Sprintf("%v_%v", "rsb_dumper_", rand.Intn(1000))
 	params := &VddkParams{ identity, ver, conn, disk}
 	return params, nil
 }
@@ -169,10 +171,6 @@ func NewVadpDumper(params VddkParams, mode DumpMode) (*VadpDumper, error) {
 }
 
 func (d *VadpDumper) ConnectToDisk() (err error) {
-	if res := disklib.Init(d.Major, d.Minor, d.LibPath); res != nil {
-		return fmt.Errorf("disklib.Init: %v", res)
-	}
-
 	vmxSpec    := d.VmMoRef
 	servName   := d.VsphereHostName
 	thumbPrint := d.VsphereThumbPrint
@@ -204,16 +202,33 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 	d.connParams = &params
 	log.Infof("ConnectParams: %v", params)
 
-	errVix := disklib.PrepareForAccess(params)
+	var numCleanUp, numRemaining uint32
+	disklib.Cleanup(*d.connParams, numCleanUp, numRemaining)
+
+	if res := disklib.Init(d.Major, d.Minor, d.LibPath); res != nil {
+		return fmt.Errorf("disklib.Init: %v", res)
+	}
+
+	var errVix disklib.VddkError
+	for i := 0; i < 10; i++ {
+		errVix = disklib.PrepareForAccess(params)
+		if errVix == nil {
+			break
+		}
+
+		log.Warnf("PrepareForAccess: %v", errVix)
+		disklib.EndAccess(params)
+		time.Sleep(time.Duration(2)*time.Second)
+	}
 	if errVix != nil {
 		return fmt.Errorf("PrepareForAccess: %v", errVix)
 	}
 	log.Infof("PrepareForAccess success\n")
 
 	defer func() {
-		if err != nil {
-			disklib.EndAccess(params)
-		}
+		// Programs should call VixDiskLib_EndAccess to re-enable the relocate method,
+		// regardless of VixDiskLib_PrepareForAccess return status
+		disklib.EndAccess(params)
 	}()
 
 	conn, errVix := disklib.ConnectEx(params)
@@ -263,7 +278,6 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 	log.Infof("GetInfo: %+v\n", info)
 	d.diskInfo = &info
 
-
 	diskHandle := virtual_disks.NewDiskHandle(dli, conn, params, info)
 
 	if d.dumpMode == DumpResotre {
@@ -272,22 +286,30 @@ func (d *VadpDumper) ConnectToDisk() (err error) {
 		d.diskHandle = &diskHandle
 	}
 
-	d.ChangeInfo.StartOffset = 0
-	d.ChangeInfo.Length = diskHandle.Capacity()
 	return nil
 }
 
 func (d *VadpDumper) Cleanup() {
+	var numCleanUp, numRemaining uint32
+	disklib.Cleanup(*d.connParams, numCleanUp, numRemaining)
+
 	if d.diskHandle != nil {
 		d.diskHandle.Close()
 	}
+
 	if d.writeHandle != nil {
 		d.writeHandle.Close()
 	}
+
 	disklib.Exit()
 }
 
 func (d *VadpDumper) QueryAllocatedBlocks() (err error) {
+	// 初始化ChangeInfo
+	d.ChangeInfo = &DiskChangeInfo{
+		StartOffset: 0,
+		Length: d.diskHandle.Capacity(),
+	}
 
 	sectorSize  := int64(disklib.VIXDISKLIB_SECTOR_SIZE)
 	blockSize   := uint64(2*1024) // 1MB block size
@@ -565,7 +587,6 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 
 		currOffset := startOffset + area.Start
 		offsetLen  := area.Length
-
 
 		maxOffset  := currOffset + offsetLen
 		for currOffset < maxOffset {

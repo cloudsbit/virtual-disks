@@ -60,6 +60,7 @@ DiskHandle Open(VixDiskLibConnection conn, char* path, uint32 flags)
 
 VixError PrepareForAccess(VixDiskLibConnectParams *cnxParams, char* identity)
 {
+    //printf("PrepareForAccess: %s\n", buf);
     return VixDiskLib_PrepareForAccess(cnxParams, identity);
 }
 
@@ -138,6 +139,7 @@ VixError Cleanup(VixDiskLibConnectParams *connectParams, uint32 numCleanedUp, ui
 {
     VixError error;
     error = VixDiskLib_Cleanup(connectParams, &numCleanedUp, &numRemaining);
+    printf("VixDiskLib_Cleanup: %d, %d\n", numCleanedUp, numRemaining);
     return error;
 }
 

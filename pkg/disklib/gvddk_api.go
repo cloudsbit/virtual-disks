@@ -124,6 +124,8 @@ func PrepareForAccess(appGlobal ConnectParams) VddkError {
 	defer C.free(unsafe.Pointer(name))
 	cnxParams, toFree := prepareConnectParams(appGlobal)
 	defer freeParams(toFree)
+
+	fmt.Printf("PrepareForAccess: cnxParams: %+v\n", cnxParams)
 	result := C.PrepareForAccess(cnxParams, name)
 	if result != 0 {
 		return NewVddkError(uint64(result), fmt.Sprintf("Prepare for access failed. The error code is %d.", result))
