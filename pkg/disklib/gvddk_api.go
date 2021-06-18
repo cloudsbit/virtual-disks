@@ -122,6 +122,7 @@ func ConnectEx(appGlobal ConnectParams) (VixDiskLibConnection, VddkError) {
 func PrepareForAccess(appGlobal ConnectParams) VddkError {
 	name := C.CString(appGlobal.identity)
 	defer C.free(unsafe.Pointer(name))
+
 	cnxParams, toFree := prepareConnectParams(appGlobal)
 	defer freeParams(toFree)
 
@@ -475,7 +476,10 @@ func QueryAllocatedBlocks(diskHandle VixDiskLibHandle, startSector VixDiskLibSec
 	}
 
 	retList := make([]VixDiskLibBlock, bld.numBlocks)
-	C.BlockListCopyAndFree(&bld, (*C.VixDiskLibBlock)(unsafe.Pointer(&retList[0])))
+	if bld.numBlocks == 0 {
+		return retList, nil
+	}
 
+	C.BlockListCopyAndFree(&bld, (*C.VixDiskLibBlock)(unsafe.Pointer(&retList[0])))
 	return retList, nil
 }

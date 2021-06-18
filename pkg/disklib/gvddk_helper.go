@@ -173,7 +173,8 @@ func (this vddkErrorImpl) VixErrorCode() uint64 {
 }
 
 func NewConnectParams(vmxSpec string, serverName string, thumbPrint string, userName string, password string,
-	fcdId string, ds string, fcdssId string, cookie string, identity string, path string, flag uint32, readOnly bool, snapshotRef string, mode string) ConnectParams {
+	fcdId string, ds string, fcdssId string, cookie string, identity string, path string, flag uint32,
+	readOnly bool, snapshotRef string, mode string) ConnectParams {
 	params := ConnectParams{
 		vmxSpec:     vmxSpec,
 		serverName:  serverName,
@@ -192,6 +193,14 @@ func NewConnectParams(vmxSpec string, serverName string, thumbPrint string, user
 		mode:        mode,
 	}
 	return params
+}
+
+func (cp *ConnectParams) SetSnapshotRef(snapRef string) {
+	cp.snapshotRef = snapRef
+}
+
+func (cp *ConnectParams) SetTransportMode(mode string) {
+	cp.mode = mode
 }
 
 func NewVddkError(err_code uint64, err_msg string) VddkError {

@@ -122,7 +122,7 @@ func ConnectEx(appGlobal ConnectParams) (VixDiskLibConnection, VddkError) {}
  * Clone() to convert the virtual disk to managed 
  * disk.
  */
-func Create(connection VixDiskLibConnection, path string, createParams VixDiskLibCreateParams, progressCallbackData string) VddkError {}
+func Create(rConn VixDiskLibConnection, path string, createParams VixDiskLibCreateParams, progressCallbackData string) VddkError {}
 ```
 ### Open a local or remote disk
 After the library connects to a workstation or server, Open opens a virtual disk. With SAN or HotAdd transport, opening a remote disk for writing requires a pre-existing snapshot. Use different open flags to modify the open instruction:
@@ -145,48 +145,48 @@ func Open(conn VixDiskLibConnection, params ConnectParams) (VixDiskLibHandle, Vd
 /**
  * This function reads a range of sectors from an open virtual disk.
  */
-func Read(diskHandle VixDiskLibHandle, startSector uint64, numSectors uint64, buf []byte) VddkError {}
+func Read(readHandle VixDiskLibHandle, startSector uint64, numSectors uint64, buf []byte) VddkError {}
 ```
 ```$xslt
 /**
  * This function writes to an open virtual disk.
  */
-func Write(diskHandle VixDiskLibHandle, startSector uint64, numSectors uint64, buf []byte) VddkError {}
+func Write(readHandle VixDiskLibHandle, startSector uint64, numSectors uint64, buf []byte) VddkError {}
 ```
 ### Metadata handling
 ```$xslt
 /**
  * Read Metadata key from disk.
  */
-func ReadMetadata(diskHandle VixDiskLibHandle, key string, buf []byte, bufLen uint, requiredLen uint) VddkError {}
+func ReadMetadata(readHandle VixDiskLibHandle, key string, buf []byte, bufLen uint, requiredLen uint) VddkError {}
 ```
 ```$xslt
 /**
  * Get metadata table from disk.
  */
-func GetMetadataKeys(diskHandle VixDiskLibHandle, buf []byte, bufLen uint, requireLen uint) VddkError {}
+func GetMetadataKeys(readHandle VixDiskLibHandle, buf []byte, bufLen uint, requireLen uint) VddkError {}
 ```
 ```$xslt
 /**
  * Write metadata table to disk.
  */
-func WriteMetadata(diskHandle VixDiskLibHandle, key string, val string) VddkError {}
+func WriteMetadata(readHandle VixDiskLibHandle, key string, val string) VddkError {}
 ```
 ### Block allocation
 ```$xslt
 /**
  * Determine allocated blocks.
  */
-func QueryAllocatedBlocks(diskHandle VixDiskLibHandle, startSector VixDiskLibSectorType, numSectors VixDiskLibSectorType, chunkSize VixDiskLibSectorType) ([]VixDiskLibBlock, VddkError) {}
+func QueryAllocatedBlocks(readHandle VixDiskLibHandle, startSector VixDiskLibSectorType, numSectors VixDiskLibSectorType, chunkSize VixDiskLibSectorType) ([]VixDiskLibBlock, VddkError) {}
 ```
 ## Shut down
 All virtual disk api applications should call these functions at the end of program.
 ### Disconnect
 ```$xslt
 /**
- * Destroy the connection. Match to Connect.
+ * Destroy the rConn. Match to Connect.
  */
-func Disconnect(connection VixDiskLibConnection) VddkError {}
+func Disconnect(rConn VixDiskLibConnection) VddkError {}
 ```
 ### EndAccess
 ```$xslt
