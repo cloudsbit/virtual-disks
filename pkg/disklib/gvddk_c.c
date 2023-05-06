@@ -35,6 +35,12 @@ VixError Init(uint32 major, uint32 minor, char* libDir)
     return result;
 }
 
+VixError InitEx(uint32 major, uint32 minor, char* libDir, char* configFile)
+{
+    VixError result = VixDiskLib_InitEx(major, minor, NULL, NULL, NULL, libDir, configFile);
+    return result;
+}
+
 VixError Connect(VixDiskLibConnectParams *cnxParams, VixDiskLibConnection *connection) {
     VixError vixError;
     vixError = VixDiskLib_Connect(cnxParams, connection);

@@ -57,7 +57,6 @@ type VadpDumper struct {
 	localHandle     *disklib.VixDiskLibHandle
 
 	ChangeInfo *DiskChangeInfo
-	Progress   *DiskProgress
 }
 
 func GetThumbPrintForServer(host string, port int) (string, error) {
@@ -125,22 +124,22 @@ func NewVadpDumper(vp VddkParams, dm DumpMode) (*VadpDumper, error) {
 
 	dumper := &VadpDumper{}
 	dumper.VddkParams = vp
-	dumper.DumpMode   = dm
+	dumper.DumpMode = dm
 
 	return dumper, nil
 }
 
 func (d *VadpDumper) SetRemoteConnParams(readOnly bool) {
-	vmxSpec    := d.VmMoRef
-	servName   := d.VsphereHostName
+	vmxSpec := d.VmMoRef
+	servName := d.VsphereHostName
 	thumbPrint := d.VsphereThumbPrint
-	userName   := d.VsphereUsername
-	password   := d.VspherePassword
-	identity   := d.Identity
-	path       := d.DiskPathRoot
-	flag       := getDiskLibFlag(d.DumpMode)
-	snapRef    := d.VsphereSnapshotMoRef
-	transMode  := disklib.NBD // FIXME
+	userName := d.VsphereUsername
+	password := d.VspherePassword
+	identity := d.Identity
+	path := d.DiskPathRoot
+	flag := getDiskLibFlag(d.DumpMode)
+	snapRef := d.VsphereSnapshotMoRef
+	transMode := disklib.NBD // FIXME
 
 	// 连接到vsphere对应的vm及其disk的参数
 	connParams := disklib.NewConnectParams(
@@ -197,11 +196,9 @@ func (d *VadpDumper) SetLocalConnParams(diskName string, readOnly bool) {
 	d.LocalConnParams = &connParams
 }
 
-//
 // NOTE: VddkLibInit只能在主线程调用一次
 // 参考链接：Multithreading Considerations:
 // https://code.vmware.com/docs/4076/virtual-disk-development-kit-programming-guide/doc/vddkFunctions.6.13.html
-//
 func VddkLibInit(ver VddkVersion) error {
 	//FIXME: Init函数里面的参数待增加优化...
 	return disklib.Init(ver.Major, ver.Minor, ver.LibPath)
@@ -212,11 +209,8 @@ func VddkLibDeInit() {
 	disklib.Exit()
 }
 
-
-//
 // NOTE: PrepareForAccess这里是针对整个vm的，而非单个disk, 正确的用法是创建快照之前调用该函数, 该函数不能用于ESXi host.
 // 参考链接：vddk doc 7.0: Prepare For Access and End Access
-//
 func (d *VadpDumper) PrepareForAccess() error {
 	if d.RemoteConnParams == nil {
 		return ErrConnParam
@@ -238,10 +232,8 @@ func (d *VadpDumper) PrepareForAccess() error {
 	return fmt.Errorf("PrepareForAccess error: %v\n", errVix)
 }
 
-//
 // NOTE:
 // 该函数可以用做程序崩溃时的清理
-//
 func (d *VadpDumper) EndAccess() error {
 	if d.RemoteConnParams == nil {
 		return ErrConnParam
@@ -575,13 +567,6 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 	//sectorPer   := 1024
 	//sectorSize  := disklib.VIXDISKLIB_SECTOR_SIZE
 
-	estimate := GetEstimateSize(dc)
-	capacity := uint64(dc.Length)
-
-	d.Progress = &DiskProgress{}
-	d.Progress.SetCapacitySize(capacity)
-	d.Progress.SetEstimateSize(estimate)
-
 	// NOTE:
 	// 每次读的大小为1MB, 也就是(2048个扇区, 每个扇区512Byte)
 	sectorSize := int64(disklib.VIXDISKLIB_SECTOR_SIZE * 1024 * 2)
@@ -618,16 +603,12 @@ func (d *VadpDumper) DumpCloneDisk(dc *DiskChangeInfo) (err error) {
 			if readLen != writeLen || int64(readLen) != sectorSize {
 				log.Warnf("readLen: %v, writeLen: %v, sectorSize: %v", readLen, writeLen, sectorSize)
 			}
-
-			d.Progress.SetProcessedSize(uint64(currOffset))
-			d.Progress.UpdateFinishedSize(uint64(readLen))
 		}
 	}
 	return nil
 }
 
 func (d *VadpDumper) DumpBackupDisk() (err error) {
-
 	return nil
 }
 

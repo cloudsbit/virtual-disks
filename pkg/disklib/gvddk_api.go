@@ -40,6 +40,25 @@ func Init(majorVersion uint32, minorVersion uint32, dir string) VddkError {
 	return nil
 }
 
+func InitEx(majorVersion uint32, minorVersion uint32, dir string, configFile string) VddkError {
+	var result C.VixError
+	libDir := C.CString(dir)
+	defer C.free(unsafe.Pointer(libDir))
+	if configFile == "" {
+		result = C.Init(C.uint32(majorVersion), C.uint32(minorVersion), libDir)
+	} else {
+		config := C.CString(configFile)
+		defer C.free(unsafe.Pointer(config))
+		result = C.InitEx(C.uint32(majorVersion), C.uint32(minorVersion), libDir, config)
+	}
+
+	if result != 0 {
+		return NewVddkError(uint64(result), fmt.Sprintf("Initialize failed. The error code is %d.", result))
+	}
+	return nil
+}
+
+
 func prepareConnectParams(appGlobal ConnectParams) (*C.VixDiskLibConnectParams, []*C.char) {
 	// Trans string to CString
 	vmxSpec := C.CString(appGlobal.vmxSpec)
@@ -76,8 +95,8 @@ func prepareConnectParams(appGlobal ConnectParams) (*C.VixDiskLibConnectParams, 
 		cnxParams.credType = C.VIXDISKLIB_CRED_UID
 		C.Params_helper(cnxParams, cookie, userName, password, false, false)
 	} else {
-		//cnxParams.credType = C.VIXDISKLIB_CRED_SESSIONID
-		//C.Params_helper(cnxParams, cookie, userName, password, false, true)
+		cnxParams.credType = C.VIXDISKLIB_CRED_SESSIONID
+		C.Params_helper(cnxParams, cookie, userName, password, false, true)
 	}
 	return cnxParams, cParams
 }
