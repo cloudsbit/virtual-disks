@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudsbit/virtual-disks/pkg/disklib"
-	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
+	"github.com/cloudsbit/virtual-disks/v2/pkg/disklib"
+	"github.com/cloudsbit/virtual-disks/v2/pkg/virtual_disks"
 	log "github.com/sirupsen/logrus"
 )
 

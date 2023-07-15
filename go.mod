@@ -1,4 +1,4 @@
-module github.com/cloudsbit/virtual-disks
+module github.com/cloudsbit/virtual-disks/v2
 
 go 1.20
 

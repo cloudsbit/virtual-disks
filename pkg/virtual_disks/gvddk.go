@@ -22,9 +22,9 @@ import (
 	"io"
 	"sync"
 
+	"github.com/cloudsbit/virtual-disks/v2/pkg/disklib"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/cloudsbit/virtual-disks/pkg/disklib"
 )
 
 func OpenFCD(serverName string, thumbPrint string, userName string, password string, fcdId string, fcdssid string, datastore string,
@@ -354,4 +354,3 @@ func (this DiskConnectHandle) ReadMetadata(key string, buf []byte, bufLen uint, 
 func (this DiskConnectHandle) WriteMetadata(key string, buf []byte) disklib.VddkError {
 	return disklib.WriteMetadata(this.dli, key, buf)
 }
-

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/cloudsbit/virtual-disks/pkg/disklib"
+	"github.com/cloudsbit/virtual-disks/v2/pkg/disklib"
 	"os"
 	"testing"
 )
@@ -38,7 +38,7 @@ func TestCreate(t *testing.T) {
 	fcdId := os.Getenv("FCDID")
 	ds := os.Getenv("DATASTORE")
 	identity := os.Getenv("IDENTITY")
-	params := disklib.NewConnectParams("", serverName,thumPrint, userName,
+	params := disklib.NewConnectParams("", serverName, thumPrint, userName,
 		password, fcdId, ds, "", "", identity, "", disklib.VIXDISKLIB_FLAG_OPEN_COMPRESSION_SKIPZ,
 		false, "", disklib.NBD)
 	err1 := disklib.PrepareForAccess(params)
@@ -47,9 +47,9 @@ func TestCreate(t *testing.T) {
 	}
 	conn, err2 := disklib.ConnectEx(params)
 	if err2 != nil {
-	 disklib.EndAccess(params)
+		disklib.EndAccess(params)
 		t.Errorf("Connect to vixdisk lib failed. Error code: %d. Error message: %s.", err2.VixErrorCode(), err2.Error())
 	}
- disklib.Disconnect(conn)
- disklib.EndAccess(params)
+	disklib.Disconnect(conn)
+	disklib.EndAccess(params)
 }

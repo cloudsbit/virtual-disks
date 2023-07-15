@@ -18,9 +18,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/cloudsbit/virtual-disks/v2/pkg/disklib"
+	"github.com/cloudsbit/virtual-disks/v2/pkg/virtual_disks"
 	"github.com/sirupsen/logrus"
-	"github.com/cloudsbit/virtual-disks/pkg/disklib"
-	"github.com/cloudsbit/virtual-disks/pkg/virtual_disks"
 	"os"
 	"testing"
 )
@@ -41,7 +41,7 @@ func TestOpen(t *testing.T) {
 	fcdId := os.Getenv("FCDID")
 	ds := os.Getenv("DATASTORE")
 	identity := os.Getenv("IDENTITY")
-	params := disklib.NewConnectParams("", serverName,thumPrint, userName,
+	params := disklib.NewConnectParams("", serverName, thumPrint, userName,
 		password, fcdId, ds, "", "", identity, "", disklib.VIXDISKLIB_FLAG_OPEN_COMPRESSION_SKIPZ,
 		false, "", disklib.NBD)
 	diskReaderWriter, err := virtual_disks.Open(params, logrus.New())
@@ -71,7 +71,7 @@ func TestOpen(t *testing.T) {
 	// WriteAt
 	fmt.Println("WriteAt start")
 	buf1 := make([]byte, disklib.VIXDISKLIB_SECTOR_SIZE)
-	for i,_ := range(buf1) {
+	for i, _ := range buf1 {
 		buf1[i] = 'E'
 	}
 	n2, err2 := diskReaderWriter.WriteAt(buf1, 0)
