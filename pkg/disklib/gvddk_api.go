@@ -16,12 +16,17 @@ limitations under the License.
 
 package disklib
 
-// #cgo LDFLAGS: -L/usr/local/vmware-vix-disklib-distrib/lib64 -lvixDiskLib
-// #cgo CFLAGS: -I/usr/local/vmware-vix-disklib-distrib/include
-// #include "gvddk_c.h"
 import "C"
+import "fmt"
+
+/*
+#cgo LDFLAGS: -L/usr/lib/vmware-vix-disklib.8.0/lib64 -lvixDiskLib
+#cgo CFLAGS:  -I/usr/lib/vmware-vix-disklib.8.0/include -std=c99
+#include "gvddk_c.h"
+*/
+import "C"
+
 import (
-	"fmt"
 	"unsafe"
 )
 
@@ -57,7 +62,6 @@ func InitEx(majorVersion uint32, minorVersion uint32, dir string, configFile str
 	}
 	return nil
 }
-
 
 func prepareConnectParams(appGlobal ConnectParams) (*C.VixDiskLibConnectParams, []*C.char) {
 	// Trans string to CString

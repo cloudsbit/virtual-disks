@@ -16,6 +16,10 @@
 
 export GO111MODULE=on
 export GOFLAGS=-mod=readonly
+export CGO_CFLAGS="-DVer=8.0"
+#export VDDK_PATH="/usr/lib/vmware-vix-disklib.8.0"
+export CGO_CFLAGS_ALLOW="-I/usr/lib/vmware-vix-disklib.8.0/include -std=c99"
+export CGO_LDFLAGS_ALLOW="-L/usr/lib/vmware-vix-disklib.8.0/lib64 -lvixDiskLib"
 
 all: build
 

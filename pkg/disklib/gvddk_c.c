@@ -145,7 +145,7 @@ VixError Cleanup(VixDiskLibConnectParams *connectParams, uint32 numCleanedUp, ui
 {
     VixError error;
     error = VixDiskLib_Cleanup(connectParams, &numCleanedUp, &numRemaining);
-    printf("VixDiskLib_Cleanup: %d, %d\n", numCleanedUp, numRemaining);
+    //printf("VixDiskLib_Cleanup: %d, %d\n", numCleanedUp, numRemaining);
     return error;
 }
 

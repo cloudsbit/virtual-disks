@@ -82,19 +82,19 @@ const (
 type VixDiskLibSectorType uint64
 
 type ConnectParams struct {
-	vmxSpec    string
-	serverName string
-	thumbPrint string
-	userName   string
-	password   string
-	fcdId      string
-	ds         string
-	fcdssId    string
-	cookie     string
-	identity   string
-	path       string
-	flag       uint32
-	readOnly   bool
+	vmxSpec     string
+	serverName  string
+	thumbPrint  string
+	userName    string
+	password    string
+	fcdId       string
+	ds          string
+	fcdssId     string
+	cookie      string
+	identity    string
+	path        string
+	flag        uint32
+	readOnly    bool
 	snapshotRef string
 	mode        string
 }
@@ -225,13 +225,12 @@ func GetThumbPrintForURL(url url.URL) (string, error) {
 	return GetThumbPrintForServer(url.Hostname(), url.Port())
 }
 
-/*
- * Retrieves the "thumbprint" or "fingerprint" for a TLS server.  Opens a TLS
- * connection to the server/port specified with security disabled, retrieves the
- * certificate chain and computes the thumbprint as the SHA-1 hash of the server's
- * certificate.  For higher security uses, allow the user to specify the thumbprint
- * rather than automatically retrieving it.
- */
+// GetThumbPrintForServer
+// Retrieves the "thumbprint" or "fingerprint" for a TLS server.  Opens a TLS
+// connection to the server/port specified with security disabled, retrieves the
+// certificate chain and computes the thumbprint as the SHA-1 hash of the server's
+// certificate.  For higher security uses, allow the user to specify the thumbprint
+// rather than automatically retrieving it.
 func GetThumbPrintForServer(host string, port string) (string, error) {
 	var address string
 	if port != "" {
